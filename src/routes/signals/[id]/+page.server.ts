@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import { evidenceSchema, transitionSchema, versionSchema } from '$lib/models/signal';
+import { generateReportSchema } from '$lib/models/regulatory';
 
 export function load({ params }) {
   return { id: params.id };
@@ -78,5 +79,16 @@ export const actions = {
       success: true,
       reopen: { id, actor, reason, createdAt: new Date().toISOString() }
     };
+  },
+
+  generateReport: async ({ request }) => {
+    const formData = await request.formData();
+    const parsed = generateReportSchema.safeParse({
+      signalId: String(formData.get('signalId') ?? ''),
+      actor: String(formData.get('actor') ?? '')
+    });
+    if (!parsed.success) return failure(parsed.error);
+
+    return { success: true, generate: { signalId: parsed.data.signalId, actor: parsed.data.actor } };
   }
 };

@@ -7,7 +7,9 @@
     "dev": "vite --host 0.0.0.0 --port 18460",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 18460",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@skeletonlabs/skeleton": "^2.11.0",
@@ -16,12 +18,14 @@
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "autoprefixer": "^10.4.21",
+    "happy-dom": "^20.14.5",
     "postcss": "^8.5.6",
     "svelte": "^5.57.1",
     "svelte-check": "^4.7.6",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@tanstack/svelte-query": "^5.90.2",

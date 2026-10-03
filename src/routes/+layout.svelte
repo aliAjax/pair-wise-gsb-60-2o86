@@ -1,6 +1,8 @@
 <script lang="ts">
   import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
   import AppShell from '$lib/components/AppShell.svelte';
+  // 接入报送链路：启动旧数据升级、冻结漂移失效对账与跨窗口同步
+  import '$lib/stores/regulatory-store';
   import '../app.css';
 
   const queryClient = new QueryClient({

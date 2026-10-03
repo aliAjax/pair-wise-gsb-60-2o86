@@ -30,10 +30,41 @@ function readPersisted(): SignalCase[] {
 
 const internal = writable<SignalCase[]>(readPersisted());
 
+/** 变更来源：本窗口操作 vs 另一个标签页同步 */
+export type SignalsChangeOrigin = 'local' | 'external';
+const changeListeners = new Set<(signals: SignalCase[], origin: SignalsChangeOrigin) => void>();
+
 if (browser) {
+  // 外部 storage 事件应用期间标记来源，避免把跨窗口同步误报成本地变更
+  let applyingExternal = false;
+
   internal.subscribe((value) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    changeListeners.forEach((listener) => listener(value, applyingExternal ? 'external' : 'local'));
   });
+
+  // 跨窗口同步：另一个标签页修改信号后，本窗口同步最新值并按 external 通知
+  window.addEventListener('storage', (event) => {
+    if (event.key !== STORAGE_KEY || !event.newValue) return;
+    try {
+      const next = JSON.parse(event.newValue) as SignalCase[];
+      applyingExternal = true;
+      internal.set(next);
+      applyingExternal = false;
+    } catch {
+      applyingExternal = false;
+      // 忽略无法解析的跨窗口数据
+    }
+  });
+}
+
+/**
+ * 注册信号变更监听。报送链路据此驱动对账：
+ * 本地变更产生的失效/补报挂本窗口审计，跨窗口同步只更新状态。
+ */
+export function onSignalsChange(listener: (signals: SignalCase[], origin: SignalsChangeOrigin) => void) {
+  changeListeners.add(listener);
+  return () => changeListeners.delete(listener);
 }
 
 function now() {
@@ -185,6 +216,18 @@ export const signalStore = {
         const updated = structuredClone(signal);
         updated.audit.unshift(entry);
         updated.updatedAt = entry.createdAt;
+        return updated;
+      })
+    );
+  },
+
+  /** 幂等审计写入：带稳定 id 的条目（如跨窗口对账产出）已存在则跳过 */
+  upsertAudit(id: string, entry: AuditEntry) {
+    internal.update((items) =>
+      items.map((signal) => {
+        if (signal.id !== id || signal.audit.some((existing) => existing.id === entry.id)) return signal;
+        const updated = structuredClone(signal);
+        updated.audit.unshift(entry);
         return updated;
       })
     );

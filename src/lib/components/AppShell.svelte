@@ -6,6 +6,7 @@
     { href: '/signals', label: '信号台账', short: '信' },
     { href: '/trends', label: '趋势核对', short: '趋' },
     { href: '/batches', label: '批次追踪', short: '批' },
+    { href: '/regulatory', label: '监管报送', short: '报' },
     { href: '/audit', label: '审计报告', short: '审' }
   ];
 </script>

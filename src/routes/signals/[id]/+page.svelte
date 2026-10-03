@@ -2,9 +2,12 @@
   import { enhance } from '$app/forms';
   import type { SubmitFunction } from '@sveltejs/kit';
   import EvidenceMatrix from '$lib/components/EvidenceMatrix.svelte';
+  import ReportStatusBadge from '$lib/components/ReportStatusBadge.svelte';
   import RiskBadge from '$lib/components/RiskBadge.svelte';
   import type { AuditEntry, CaseVersion, EvidenceItem, SignalStatus } from '$lib/models/signal';
+  import { reportKindLabels } from '$lib/models/regulatory';
   import { exportSignalReport } from '$lib/services/signal-service';
+  import { regulatoryStore } from '$lib/stores/regulatory-store';
   import { signalStore } from '$lib/stores/signal-store';
   import type { ActionData, PageData } from './$types';
 
@@ -12,6 +15,21 @@
   export let form: ActionData;
 
   $: signal = $signalStore.find((item) => item.id === data.id);
+  $: reports = $regulatoryStore.reports
+    .filter((report) => report.signalId === data.id)
+    .sort((a, b) => b.seq - a.seq);
+  // 生成入口显隐与 regulatory-core.generateReport 的拒绝条件保持一致
+  $: canGenerate =
+    !!signal &&
+    signal.versions.length > 0 &&
+    !reports.some(
+      (report) =>
+        report.status === 'submitted' ||
+        report.status === 'acknowledged' ||
+        report.status === 'draft' ||
+        report.status === 'submission_failed'
+    );
+  let reportNotice: { tone: 'ok' | 'error'; text: string } | null = null;
   $: nextVersion = (signal?.versions[0]?.version ?? 0) + 1;
 
   const statusOptions: Array<{ value: SignalStatus; label: string }> = [
@@ -162,6 +180,116 @@
       <span class="badge">{signal.evidence.length} 项证据</span>
     </div>
     <EvidenceMatrix evidence={signal.evidence} />
+  </section>
+
+  <section class="mb-6 rounded border border-surface-300-700 bg-surface-100-900 p-4">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">监管报送件</h2>
+        <p class="mt-1 text-sm text-surface-500-400">
+          生成时冻结证据矩阵、结论版本和关联批号；这三项任一变化，已报送件自动失效，补充件另起一份。
+        </p>
+      </div>
+      <a class="btn btn-sm variant-ghost-surface" href="/regulatory">前往报送工作台</a>
+    </div>
+
+    {#if reportNotice}
+      <div
+        class="mt-3 rounded border p-3 text-sm {reportNotice.tone === 'ok'
+          ? 'border-success-300 bg-success-50 text-success-900'
+          : 'border-error-300 bg-error-50 text-error-900'}"
+      >
+        {reportNotice.text}
+      </div>
+    {/if}
+
+    <div class="mt-4 space-y-3">
+      {#each reports as report (report.id)}
+        <article class="rounded border border-surface-300-700 p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <p class="font-medium">{report.id}</p>
+              <span class="badge variant-soft-surface">{reportKindLabels[report.kind]}</span>
+              <ReportStatusBadge status={report.status} />
+            </div>
+            <span class="text-xs text-surface-500-400">
+              {report.submittedAt ? `报送于 ${report.submittedAt.slice(0, 16).replace('T', ' ')}` : `生成于 ${report.createdAt.slice(0, 16).replace('T', ' ')}`}
+            </span>
+          </div>
+          {#if report.status === 'pending_backfill'}
+            <p class="mt-2 text-xs text-amber-600">
+              旧数据升级发现：本信号有结论版本但无报送件。生成补报件后到报送工作台提交。
+            </p>
+          {:else}
+            <p class="mt-2 text-xs text-surface-500-400">
+              冻结：证据 {report.snapshot.evidence.length} 项 ·
+              结论 {report.snapshot.version ? `V${report.snapshot.version.version}` : '无版本'} ·
+              批号 {report.snapshot.batches.join('、') || '—'} ·
+              快照 {report.snapshot.evidenceHash}
+            </p>
+          {/if}
+          {#if report.gatewayReportNo}
+            <p class="mt-1 text-xs text-surface-500-400">监管报送号：{report.gatewayReportNo}</p>
+          {/if}
+          {#if report.status === 'invalidated'}
+            <p class="mt-1 text-xs text-error-700">
+              已失效：{report.invalidateReason}。请生成补充报送件，原报送件保留备查。
+            </p>
+          {/if}
+          {#if report.status === 'submission_failed'}
+            <p class="mt-1 text-xs text-error-700">最近一次提交失败，请到报送工作台就地重试，不重复生成。</p>
+          {/if}
+        </article>
+      {:else}
+        <p class="text-sm text-surface-500-400">
+          {signal.versions.length === 0
+            ? '尚未形成结论版本，不满足监管报送条件。'
+            : '尚未生成报送件。'}
+        </p>
+      {/each}
+    </div>
+
+    {#if canGenerate}
+      <form
+        class="mt-4 flex flex-wrap items-end gap-3 border-t border-surface-300-700 pt-4"
+        method="POST"
+        action="?/generateReport"
+        use:enhance={() =>
+          async ({ result, update }) => {
+            if (result.type === 'success') {
+              const payload = result.data as {
+                generate?: { signalId: string; actor: string };
+              };
+              if (payload.generate) {
+                const outcome = regulatoryStore.generate(
+                  payload.generate.signalId,
+                  payload.generate.actor
+                );
+                reportNotice = outcome.ok
+                  ? {
+                      tone: 'ok',
+                      text: `报送件 ${outcome.report?.id ?? ''} 已生成并冻结当前证据矩阵、结论版本和批号，请到报送工作台提交。`
+                    }
+                  : { tone: 'error', text: outcome.reason ?? '生成失败。' };
+              }
+            }
+            await update({ reset: true });
+          }}
+      >
+        <input type="hidden" name="signalId" value={signal.id} />
+        <label>
+          <span class="mb-1 block text-sm font-medium">操作人</span>
+          <input class="input" name="actor" value={signal.owner} />
+        </label>
+        <button class="btn variant-filled-secondary" type="submit">
+          {reports.some((report) => report.status === 'invalidated')
+            ? '生成补充报送件'
+            : reports.some((report) => report.status === 'pending_backfill')
+              ? '生成补报件'
+              : '生成报送件并冻结'}
+        </button>
+      </form>
+    {/if}
   </section>
 
   <div class="grid gap-6 xl:grid-cols-2">

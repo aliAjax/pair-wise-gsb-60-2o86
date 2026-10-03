@@ -1,5 +1,6 @@
 <script lang="ts">
   import RiskBadge from '$lib/components/RiskBadge.svelte';
+  import { regulatoryStore } from '$lib/stores/regulatory-store';
   import { signalStore } from '$lib/stores/signal-store';
 
   $: signals = $signalStore;
@@ -13,6 +14,13 @@
       .map((task) => ({ ...task, signalId: signal.id }))
   );
 
+  $: pendingBackfillReports = $regulatoryStore.reports.filter(
+    (report) => report.status === 'pending_backfill'
+  ).length;
+  $: pendingReceiptCount = $regulatoryStore.receipts.filter(
+    (receipt) => receipt.status === 'pending_review'
+  ).length;
+
   $: metrics = [
     { label: '开放信号', value: openSignals.length, note: '含调查、观察与处置队列' },
     { label: '高及以上风险', value: criticalSignals.length, note: '需复核人优先确认' },
@@ -21,7 +29,9 @@
       value: signals.flatMap((signal) => signal.tasks).filter((task) => task.status !== 'done').length,
       note: '跨信号调查任务'
     },
-    { label: '逾期任务', value: overdueTasks.length, note: '按任务截止日计算' }
+    { label: '逾期任务', value: overdueTasks.length, note: '按任务截止日计算' },
+    { label: '待补报报送件', value: pendingBackfillReports, note: '旧数据：有结论版本无报送件' },
+    { label: '回执待核对', value: pendingReceiptCount, note: '对不上报送件或信号不一致' }
   ];
 </script>
 
@@ -38,7 +48,7 @@
 
 <section class="workspace-grid mb-6">
   {#each metrics as metric}
-    <article class="col-span-12 rounded border border-surface-300-700 bg-surface-100-900 p-4 sm:col-span-6 xl:col-span-3">
+    <article class="col-span-12 rounded border border-surface-300-700 bg-surface-100-900 p-4 sm:col-span-6 md:col-span-4 xl:col-span-2">
       <p class="text-sm text-surface-500-400">{metric.label}</p>
       <p class="metric-value mt-2 text-3xl font-semibold">{metric.value}</p>
       <p class="mt-2 text-xs text-surface-500-400">{metric.note}</p>
