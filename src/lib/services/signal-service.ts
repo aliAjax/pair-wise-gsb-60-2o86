@@ -41,6 +41,16 @@ export function exportSignalReport(id: string) {
     riskLevel: signal.riskLevel,
     conclusion: signal.versions[0]?.summary ?? '尚未形成核查结论',
     evidence: signal.evidence,
+    filings: signal.filings.map((filing) => ({
+      filingNo: filing.filingNo,
+      kind: filing.kind,
+      status: filing.status,
+      receiptNo: filing.receiptNo,
+      submittedAt: filing.submittedAt,
+      supersededAt: filing.supersededAt,
+      supersededReason: filing.supersededReason,
+      snapshot: filing.snapshot
+    })),
     audit: signal.audit
   };
 

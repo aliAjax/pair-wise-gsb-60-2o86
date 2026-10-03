@@ -1,6 +1,9 @@
 import type { SignalCase } from '$lib/models/signal';
 
-export const seedSignals: SignalCase[] = [
+// 种子数据刻意停留在 v1 结构（无 filings），由升级流程判定"有结论版本无报送件 -> 待补报"
+type LegacySeedSignal = Omit<SignalCase, 'filings'> & { filings?: SignalCase['filings'] };
+
+export const seedSignals: LegacySeedSignal[] = [
   {
     id: 'SIG-2026-018',
     title: '输注泵阻塞报警集中发生于同一批管路',

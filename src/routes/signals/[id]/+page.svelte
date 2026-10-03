@@ -2,9 +2,17 @@
   import { enhance } from '$app/forms';
   import type { SubmitFunction } from '@sveltejs/kit';
   import EvidenceMatrix from '$lib/components/EvidenceMatrix.svelte';
+  import FilingCard from '$lib/components/FilingCard.svelte';
   import RiskBadge from '$lib/components/RiskBadge.svelte';
-  import type { AuditEntry, CaseVersion, EvidenceItem, SignalStatus } from '$lib/models/signal';
+  import type {
+    AuditEntry,
+    CaseVersion,
+    EvidenceItem,
+    RegulatoryFiling,
+    SignalStatus
+  } from '$lib/models/signal';
   import { exportSignalReport } from '$lib/services/signal-service';
+  import { generateFiling, submitFiling } from '$lib/services/filing-service';
   import { signalStore } from '$lib/stores/signal-store';
   import type { ActionData, PageData } from './$types';
 
@@ -13,6 +21,66 @@
 
   $: signal = $signalStore.find((item) => item.id === data.id);
   $: nextVersion = (signal?.versions[0]?.version ?? 0) + 1;
+
+  let filingBusyId: string | null = null;
+  let filingFlash: { kind: 'ok' | 'error' | 'warn'; text: string } | null = null;
+
+  // 达到处置条件（风险沟通 / 纠正措施）的结论才允许报送
+  $: reportable =
+    !!signal &&
+    signal.versions.length > 0 &&
+    signal.versions[0].disposition !== 'continue_observation';
+  $: sortedFilings = signal
+    ? [...signal.filings].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    : [];
+  $: hasActiveFiling =
+    !!signal &&
+    signal.filings.some(
+      (filing) =>
+        filing.status === 'pending_submission' ||
+        filing.status === 'submitted' ||
+        filing.status === 'send_failed'
+    );
+
+  function handleGenerate() {
+    if (!signal) return;
+    filingFlash = null;
+    const result = generateFiling(signal.id, 'initial');
+    if (result.ok && result.filing) {
+      filingFlash = {
+        kind: 'ok',
+        text: result.reason
+          ? result.reason
+          : `报送件 ${result.filing.filingNo} 已生成，冻结了 V${result.filing.snapshot.versionNo} 结论、证据矩阵与关联批号。`
+      };
+    } else {
+      filingFlash = { kind: 'error', text: result.reason ?? '报送件生成失败。' };
+    }
+  }
+
+  async function handleSubmitFiling(event: { detail: { filing: RegulatoryFiling } }) {
+    if (!signal || filingBusyId) return;
+    const filing = event.detail.filing;
+    filingBusyId = filing.id;
+    filingFlash = null;
+    const result = await submitFiling(filing.id, signal.owner);
+    filingBusyId = null;
+    if (result.kind === 'submitted') {
+      filingFlash = {
+        kind: 'ok',
+        text: `报送号 ${result.filing.filingNo} 已送达，本地后续修改不会改变已报送内容。`
+      };
+    } else if (result.kind === 'failed') {
+      filingFlash = {
+        kind: 'error',
+        text: `报送失败：${result.error}。可在下方就地重试，报送件保持不变。`
+      };
+    } else if (result.kind === 'concurrent_lost') {
+      filingFlash = { kind: 'warn', text: result.message };
+    } else {
+      filingFlash = { kind: 'error', text: result.message };
+    }
+  }
 
   const statusOptions: Array<{ value: SignalStatus; label: string }> = [
     { value: 'investigating', label: '转入调查' },
@@ -270,6 +338,65 @@
       </form>
     </section>
   </div>
+
+  <section class="mb-6 rounded border border-surface-300-700 bg-surface-100-900 p-4">
+    <div class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">监管报送与核查链路</h2>
+        <p class="mt-1 text-sm text-surface-500-400">
+          报送件生成即冻结证据矩阵、结论版本和关联批号；此后任一项变化，原报送件自动失效，补充件另起一份。
+        </p>
+      </div>
+      <a class="btn btn-sm variant-ghost-surface" href="/filings">前往报送中心</a>
+    </div>
+
+    {#if filingFlash}
+      <div
+        class="mt-4 rounded border p-3 text-sm {filingFlash.kind === 'ok'
+          ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+          : filingFlash.kind === 'error'
+            ? 'border-error-300 bg-error-50 text-error-900'
+            : 'border-amber-300 bg-amber-50 text-amber-900'}"
+      >
+        {filingFlash.text}
+      </div>
+    {/if}
+
+    {#if signal.versions.length === 0}
+      <p class="mt-4 text-sm text-surface-500-400">形成首个结论版本后，才能生成监管报送件。</p>
+    {:else if !reportable}
+      <p class="mt-4 text-sm text-surface-500-400">
+        当前最新结论（V{signal.versions[0].version}）建议为“继续观察”，未达到处置报送条件；
+        结论升级为风险沟通或纠正措施后即可报送。
+      </p>
+    {:else}
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        {#if !hasActiveFiling}
+          <button class="btn variant-filled-primary" type="button" on:click={handleGenerate}>
+            生成报送件（冻结当前核查内容）
+          </button>
+        {/if}
+        <span class="text-xs text-surface-500-400">
+          最新结论 V{signal.versions[0].version} ·
+          {signal.versions[0].disposition === 'risk_communication' ? '风险沟通' : '纠正措施'}
+        </span>
+      </div>
+    {/if}
+
+    {#if sortedFilings.length > 0}
+      <div class="mt-4 grid gap-3 xl:grid-cols-2">
+        {#each sortedFilings as filing (filing.id)}
+          <FilingCard
+            {filing}
+            signalTitle={signal.title}
+            signalHref={`/signals/${signal.id}`}
+            busy={filingBusyId === filing.id}
+            onsubmit={handleSubmitFiling}
+          />
+        {/each}
+      </div>
+    {/if}
+  </section>
 
   <div class="mt-6 grid gap-6 xl:grid-cols-2">
     <section class="rounded border border-surface-300-700 bg-surface-100-900 p-4">
