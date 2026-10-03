@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  font-family:
+    "PingFang SC",
+    "Microsoft YaHei",
+    "Noto Sans CJK SC",
+    sans-serif;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.metric-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid rgb(148 163 184 / 0.28);
+  vertical-align: top;
+}
+
+.data-table th {
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: rgb(100 116 139);
+}
+
+.section-rule {
+  border-top: 1px solid rgb(148 163 184 / 0.28);
+}
+
+.evidence-strong {
+  border-left: 4px solid #059669;
+}
+
+.evidence-conflicting {
+  border-left: 4px solid #dc2626;
+}
+
+.evidence-weak {
+  border-left: 4px solid #d97706;
+}
+
+.timeline-item {
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: 0.25rem;
+  top: 0.35rem;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: #0f766e;
+}
+
+.timeline-item::after {
+  content: "";
+  position: absolute;
+  left: 0.52rem;
+  top: 1rem;
+  bottom: -0.75rem;
+  width: 1px;
+  background: rgb(148 163 184 / 0.5);
+}
+
+.timeline-item:last-child::after {
+  display: none;
+}

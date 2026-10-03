@@ -1,0 +1,30 @@
+{
+  "name": "medical-device-safety-signal-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 18460",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 18460",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@skeletonlabs/skeleton": "^2.11.0",
+    "@skeletonlabs/tw-plugin": "^0.4.1",
+    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "@tanstack/svelte-query": "^5.90.2",
+    "zod": "^4.1.12"
+  }
+}
